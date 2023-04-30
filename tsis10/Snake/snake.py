@@ -1,8 +1,16 @@
-import pygame
-import time
-import random
+import pygame, random, sys ,os,time, psycopg2
+from pygame.locals import *
 
-snake_speed = 20
+conn = psycopg2.connect(
+    host="localhost",
+    database="postgres",
+    user="postgres",
+    password="postgres"
+)
+
+cur = conn.cursor()
+
+snake_speed = 10
 
 # размер окна
 window_x = 720
@@ -48,10 +56,48 @@ change_to = direction
 
 # начальная оценка
 score = 0
-level = 0
-x=0
+level = 1
+x = 0
+name = ""
+
+def welcome():
+    user_name = "Write user name:"
+    global name
+    FONT_SIZE = 24
+    FONT = pygame.font.SysFont("Arial", FONT_SIZE)
+    text_box = pygame.Rect(window_x / 2 - 100, window_y / 4 + 50, 200, 40)
+    text = ""
+    cursor = "|"
+    ch = True
+    while ch:
+        # Handle events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_BACKSPACE:
+                    text = text[:-1]
+                elif event.key == pygame.K_RETURN:
+                    ch = False
+                else:
+                    text += event.unicode
+
+        name = text
+        # Draw the screen
+        game_window.fill(white)
+        pygame.draw.rect(game_window, black, text_box, 2)
+
+        # Draw the text
+        text_surface = FONT.render(text + cursor, True, black)
+        game_window.blit(text_surface, (text_box.x + 5, text_box.y + 5))
+
+        # Update the display
+        pygame.display.flip()
+
+
 # отображение функции Score
-def show_score(choice, color, font, size) :
+def show_score(choice, color, font, size):
     # создание объекта шрифта score_font
     score_font = pygame.font.SysFont(font, size)
 
@@ -66,7 +112,8 @@ def show_score(choice, color, font, size) :
     # отображение текста
     game_window.blit(score_surface, score_rect)
 
-def show_level(choice, color, font, size) :
+
+def show_level(choice, color, font, size):
     # создание объекта шрифта score_font
     score_font = pygame.font.SysFont(font, size)
 
@@ -76,20 +123,34 @@ def show_level(choice, color, font, size) :
 
     # создаем прямоугольный объект для текста
     # поверхностный объект
-    score_rect = score_surface.get_rect(topright=(650,0))
+    score_rect = score_surface.get_rect(topright=(650, 0))
 
     # отображение текста
     game_window.blit(score_surface, score_rect)
 
+
 # функция завершения игры
-def game_over() :
+def game_over():
+    cur.execute(
+        "INSERT INTO user_name (username) VALUES (%s)",
+        (name,)
+    )
+    cur.execute("SELECT id FROM user_name WHERE username = %s", (name,))
+    user_id = cur.fetchone()[0]
+    cur.execute(
+        'INSERT INTO user_score (user_id, score, level) VALUES (%s, %s, %s)',
+        (user_id, score, level)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
     # создание объекта шрифта my_font
     my_font = pygame.font.SysFont('times new roman', 50)
 
     # создание текстовой поверхности, на которой текст
     # будет нарисовано
     game_over_surface = my_font.render(
-        'Score is : ' + str(score)+'  Level :'+str(level), True, red)
+        'Score is : ' + str(score) + '  Level :' + str(level), True, red)
 
     # создать прямоугольный объект для текста
     # surface object
@@ -111,81 +172,87 @@ def game_over() :
     # quit the program
     quit()
 
+welcome()
 
 # Main Function
-while True :
+
+tm = time.time()
+
+while True:
 
     # обработка ключевых событий
-    for event in pygame.event.get() :
-        if event.type == pygame.KEYDOWN :
-            if event.key == pygame.K_UP :
+    for event in pygame.event.get():
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
                 change_to = 'UP'
-            if event.key == pygame.K_DOWN :
+            if event.key == pygame.K_DOWN:
                 change_to = 'DOWN'
-            if event.key == pygame.K_LEFT :
+            if event.key == pygame.K_LEFT:
                 change_to = 'LEFT'
-            if event.key == pygame.K_RIGHT :
+            if event.key == pygame.K_RIGHT:
                 change_to = 'RIGHT'
 
     # Если две клавиши нажаты одновременно
     # мы не хотим, чтобы змея разделялась на две
     # направлений одновременно
-    if change_to == 'UP' and direction != 'DOWN' :
+    if change_to == 'UP' and direction != 'DOWN':
         direction = 'UP'
-    if change_to == 'DOWN' and direction != 'UP' :
+    if change_to == 'DOWN' and direction != 'UP':
         direction = 'DOWN'
-    if change_to == 'LEFT' and direction != 'RIGHT' :
+    if change_to == 'LEFT' and direction != 'RIGHT':
         direction = 'LEFT'
-    if change_to == 'RIGHT' and direction != 'LEFT' :
+    if change_to == 'RIGHT' and direction != 'LEFT':
         direction = 'RIGHT'
 
     # Перемещение змеи
-    if direction == 'UP' :
+    if direction == 'UP':
         snake_position[1] -= 10
-    if direction == 'DOWN' :
+    if direction == 'DOWN':
         snake_position[1] += 10
-    if direction == 'LEFT' :
+    if direction == 'LEFT':
         snake_position[0] -= 10
-    if direction == 'RIGHT' :
+    if direction == 'RIGHT':
         snake_position[0] += 10
 
     # Механизм роста тела змеи
-    # если фрукты и змеи сталкиваются, то очки
-    # будет увеличено на 10
     snake_body.insert(0, list(snake_position))
-    if snake_position[0] == fruit_position[0] and snake_position[1] == fruit_position[1] :
-        score += 10
+    if snake_position[0] == fruit_position[0] and snake_position[1] == fruit_position[1]:
+        score += random.randrange(10, 31, 10)
         fruit_spawn = False
-    else :
+    else:
+        # timer and change pos
+        if time.time() - tm > 5:
+            tm = time.time()
+            fruit_spawn = False
         snake_body.pop()
 
-    if not fruit_spawn :
+    if not fruit_spawn:
         fruit_position = [random.randrange(1, (window_x // 10)) * 10,
                           random.randrange(1, (window_y // 10)) * 10]
 
     fruit_spawn = True
     game_window.fill(black)
-    
-    if score==x+40:
-        snake_speed+=5
-        level+=1
-        x+=40
 
-    for pos in snake_body :
+    if score == x + 40:
+        snake_speed += 5
+        level += 1
+        x += 40
+
+    for pos in snake_body:
         pygame.draw.rect(game_window, green,
                          pygame.Rect(pos[0], pos[1], 10, 10))
     pygame.draw.rect(game_window, white, pygame.Rect(
         fruit_position[0], fruit_position[1], 10, 10))
 
     # Game Over conditions
-    if snake_position[0] < 0 or snake_position[0] > window_x - 10 :
+    if snake_position[0] < 0 or snake_position[0] > window_x - 10:
         game_over()
-    if snake_position[1] < 0 or snake_position[1] > window_y - 10 :
+    if snake_position[1] < 0 or snake_position[1] > window_y - 10:
         game_over()
 
     # Touching the snake body
-    for block in snake_body[1 :] :
-        if snake_position[0] == block[0] and snake_position[1] == block[1] :
+    for block in snake_body[1:]:
+        if snake_position[0] == block[0] and snake_position[1] == block[1]:
             game_over()
 
     # displaying score countinuously

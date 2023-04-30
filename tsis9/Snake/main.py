@@ -121,9 +121,12 @@ tm = time.time()
 
 while True:
 
+
     # обработка ключевых событий
     for event in pygame.event.get():
-        if event.type == pygame.KEYDOWN:
+        if event.type == pygame.QUIT:
+            exit()
+        elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 change_to = 'UP'
             if event.key == pygame.K_DOWN:
@@ -164,7 +167,7 @@ while True:
         fruit_spawn = False
     else:
         # timer and change pos
-        if time.time() - tm > 5:
+        if time.time() - tm > 1:
             tm = time.time()
             fruit_spawn = False
         snake_body.pop()
